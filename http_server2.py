@@ -125,7 +125,11 @@ def receive_request(port):
                     #print('  sending {!r} to {}'.format(next_msg,s.getpeername()),file=sys.stderr)
                     #print(type(next_msg))
                     #print(next_msg)
-                    s.send(b""+next_msg.encode())
+                    s.send(b""+next_msg)
+                    if s in outputs:
+                        outputs.remove(s)
+                    inputs.remove(s)
+                    s.close()
 
 
 if __name__ == '__main__':
