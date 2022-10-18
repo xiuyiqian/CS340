@@ -1,5 +1,6 @@
 # do not import anything else from loss_socket besides LossyUDP
 import struct
+from concurrent.futures import ThreadPoolExecutor
 
 from lossy_socket import LossyUDP
 # do not import anything else from socket except INADDR_ANY
@@ -19,6 +20,9 @@ class Streamer:
         self.seq_no = 0
         self.buffer = {}
         self.remove_key = []
+        self.closed = False
+        executor = ThreadPoolExecutor(max_workers=1)
+        executor.submit(self.listener)
 
     def send(self, data_bytes: bytes) -> None:
         """Note that data_bytes can be larger than one packet."""
@@ -39,9 +43,10 @@ class Streamer:
             self.seq_no += 1
 
     def process_dict_packets(self, multiple_output):
-        for key, val in self.buffer.items():
+        # print("next_seq_no=", self.next_seq_no)
+        for key, val in self.buffer.copy().items():  # since multithreading, we need to make copy while we iterate through
             if key == self.next_seq_no:
-                # print("seq num matches", key)
+                print("seq num matches", key)
                 self.next_seq_no += 1
                 self.remove_key.append(key)
                 multiple_output += val
@@ -49,40 +54,39 @@ class Streamer:
         if multiple_output != b"":
             if len(self.remove_key) != 0:
                 for _, val in enumerate(self.remove_key):
-                    self.buffer.pop(val)
+                    self.buffer.copy().pop(val)
             self.remove_key = []
-            # print("dict info ====", self.buffer.keys())
             return multiple_output
         return b""
 
     def recv(self) -> bytes:
         """Blocks (waits) if no data is ready to be read from the connection."""
         # your code goes here!  The code below should be changed!
-        chunks = b''
-        data, _ = self.socket.recvfrom()
-        if len(data) == 0:
-            return data
-
-        packet = struct.unpack('i ' + str(len(data) - 4) + 's', data)
-        recv_seq_no = packet[0]
-        recv_data = packet[1]
-        # print("recv_seq_no=", recv_seq_no, "recv_data=", recv_data)
-
-        # print("dict now =", self.buffer)
-        if recv_seq_no != self.next_seq_no:
-            self.buffer[recv_seq_no] = recv_data
-            # print("recv_seq_no != next_seq_no, received=", recv_seq_no, "expected=", self.next_seq_no)
-            return self.process_dict_packets(b"")
-        else:
-            # print("recv_seq_no == next_seq_no, received=", recv_seq_no, "expected=", self.next_seq_no)
-            # print("dict info ====", self.buffer.keys())
-            self.next_seq_no += 1
-            return self.process_dict_packets(recv_data)
-        # this sample code just calls the recvfrom method on the LossySocket
-        # For now, I'll just pass the full UDP payload to the app
+        return self.process_dict_packets(b"")
 
     def close(self) -> None:
         """Cleans up. It should block (wait) until the Streamer is done with all
            the necessary ACKs and retransmissions"""
         # your code goes here, especially after you add ACKs and retransmissions.
+        self.closed = True
+        self.socket.stoprecv()
         pass
+
+    def listener(self):
+        while not self.closed:  # a later hint will explain self.closed
+            try:
+                data, addr = self.socket.recvfrom()
+                if len(data) == 0:
+                    return data
+                # store the data in the receive buffer
+                packet = struct.unpack('i ' + str(len(data) - 4) + 's', data)
+                recv_seq_no = packet[0]
+                recv_data = packet[1]
+
+                self.buffer[recv_seq_no] = recv_data
+
+                # print("recv_seq_no=", recv_seq_no, "recv_data=", recv_data)
+                # print("buffer size=", len(self.buffer))
+            except Exception as e:
+                print(" listener died !")
+                print(e)
