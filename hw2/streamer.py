@@ -24,6 +24,10 @@ class Streamer:
         self.closed = False
         self.ack = 0
         self.ack_no = 0
+
+        self.time_out = 0.1  # threshold value
+        self.retransmission = False
+
         executor = ThreadPoolExecutor(max_workers=1)
         executor.submit(self.listener)
 
@@ -44,6 +48,18 @@ class Streamer:
             print("send_seq_no=", self.seq_no, "data_bytes", len(data_bytes), "ack=", self.ack)
             self.socket.sendto(packet, (self.dst_ip, self.dst_port))
             self.seq_no += 1
+
+        for i in self.buffer.copy():
+            if i <= self.ack_no:
+                self.buffer.pop(i)
+                continue
+            if time.time() - self.buffer[i][0] > self.time_out:
+                self.retransmission = True
+
+        if self.retransmission:
+            for p in self.buffer:
+                self.socket.sendto(self.buffer[p][1], (self.dst_ip, self.dst_port))
+
         while self.ack == 0:
             # print("not ack yet, seq_no=", self.seq_no)
             time.sleep(0.01)
@@ -58,7 +74,7 @@ class Streamer:
                 self.next_seq_no += 1
                 print("seq num matches", key, "next_seq_no", self.next_seq_no)
                 self.remove_key.append(key)
-                multiple_output += val
+                multiple_output += val[1]
 
         if multiple_output != b"":
             if len(self.remove_key) != 0:
@@ -101,7 +117,6 @@ class Streamer:
                     print("server side: only ack received and ack==", self.ack)
                     continue
 
-
                 # print("recv_seq_no=", recv_seq_no, "recv_data=", recv_data, "ack is=", self.ack)
                 print("buffer size=", len(self.buffer), "buffer==", self.buffer)
                 print("recv_seq_no=", recv_seq_no, "nextSeq_no=", self.next_seq_no)
@@ -112,7 +127,7 @@ class Streamer:
                     self.ack_no = self.next_seq_no
                     self.send(b'')
 
-                self.buffer[recv_seq_no] = recv_data
+                self.buffer[recv_seq_no] = (time.time(),recv_data)
 
             except Exception as e:
                 print(" listener died !")
