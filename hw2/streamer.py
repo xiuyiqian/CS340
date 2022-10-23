@@ -34,6 +34,7 @@ class Streamer:
     def send(self, data_bytes: bytes) -> None:
         """Note that data_bytes can be larger than one packet."""
         # Your code goes here!  The code below should be changed!
+        send_time = time.time()
         while len(data_bytes) >= 1460:
             tmp_bytes = data_bytes[0:1460]
             packet = struct.pack('i i i' + str(len(tmp_bytes)) + 's', self.seq_no, self.ack, self.ack_no, tmp_bytes)
@@ -49,21 +50,14 @@ class Streamer:
             self.socket.sendto(packet, (self.dst_ip, self.dst_port))
             self.seq_no += 1
 
-        for i in self.buffer.copy():
-            if i <= self.ack_no:
-                self.buffer.pop(i)
-                continue
-            if time.time() - self.buffer[i][0] > self.time_out:
-                self.retransmission = True
-
-        if self.retransmission:
-            for p in self.buffer:
-                self.socket.sendto(self.buffer[p][1], (self.dst_ip, self.dst_port))
-
         while self.ack == 0:
             # print("not ack yet, seq_no=", self.seq_no)
             time.sleep(0.01)
-
+            if time.time() - send_time > self.time_out:
+                self.seq_no = self.ack_no+1
+                print("retransmit: ", self.seq_no)
+                self.send(data_bytes)
+                return
         self.ack = 0
         print("go here")
 
@@ -74,7 +68,7 @@ class Streamer:
                 self.next_seq_no += 1
                 print("seq num matches", key, "next_seq_no", self.next_seq_no)
                 self.remove_key.append(key)
-                multiple_output += val[1]
+                multiple_output += val
 
         if multiple_output != b"":
             if len(self.remove_key) != 0:
@@ -114,6 +108,7 @@ class Streamer:
                 print("len of data: ", len(recv_data))
                 if len(recv_data) <= 1:
                     self.next_seq_no = self.ack_no+1
+                    self.seq_no = self.ack_no+1
                     print("server side: only ack received and ack==", self.ack)
                     continue
 
@@ -127,7 +122,13 @@ class Streamer:
                     self.ack_no = self.next_seq_no
                     self.send(b'')
 
-                self.buffer[recv_seq_no] = (time.time(),recv_data)
+                elif recv_seq_no <= self.ack_no:
+                    self.ack = 1
+                    self.ack_no = recv_seq_no
+                    self.send(b'')
+                    continue
+
+                self.buffer[recv_seq_no] = recv_data
 
             except Exception as e:
                 print(" listener died !")
