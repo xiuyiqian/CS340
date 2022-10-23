@@ -19,13 +19,16 @@ class Streamer:
         self.dst_port = dst_port
         self.next_seq_no = 0
         self.seq_no = 0
+
+        self.send_buffer = {}
+
         self.buffer = {}
         self.remove_key = []
         self.closed = False
         self.ack = 0
         self.ack_no = 0
 
-        self.time_out = 0.1  # threshold value
+        self.time_out = 0.25  # threshold value
         self.retransmission = False
 
         executor = ThreadPoolExecutor(max_workers=1)
@@ -34,11 +37,14 @@ class Streamer:
     def send(self, data_bytes: bytes) -> None:
         """Note that data_bytes can be larger than one packet."""
         # Your code goes here!  The code below should be changed!
+
+
         while len(data_bytes) >= 1460:
             tmp_bytes = data_bytes[0:1460]
             packet = struct.pack('i i i' + str(len(tmp_bytes)) + 's', self.seq_no, self.ack, self.ack_no, tmp_bytes)
             # print("send_seq_no=", self.seq_no, "tmp_bytes", len(tmp_bytes), "tmp_bytes=", tmp_bytes)
             data_bytes = data_bytes[1460:]
+            self.send_buffer[self.seq_no] = (time.time(),packet)
             self.socket.sendto(packet, (self.dst_ip, self.dst_port))
             self.seq_no += 1
 
@@ -46,26 +52,27 @@ class Streamer:
         if len(data_bytes) >= 0:
             packet = struct.pack('i i i' + str(len(data_bytes)) + 's', self.seq_no, self.ack, self.ack_no, data_bytes)
             print("send_seq_no=", self.seq_no, "data_bytes", len(data_bytes), "ack=", self.ack)
+            self.send_buffer[self.seq_no] = (time.time(), packet)
             self.socket.sendto(packet, (self.dst_ip, self.dst_port))
             self.seq_no += 1
 
-        for i in self.buffer.copy():
+        #index = 0 # record which packet is going to lose
+
+        for i in self.send_buffer.copy():
             if i <= self.ack_no:
-                self.buffer.pop(i)
+                self.send_buffer.pop(i)
                 continue
-            if time.time() - self.buffer[i][0] > self.time_out:
+            if time.time() - self.send_buffer[i][0] > self.time_out:
+                #index = i
                 self.retransmission = True
 
         if self.retransmission:
-            for p in self.buffer:
-                self.socket.sendto(self.buffer[p][1], (self.dst_ip, self.dst_port))
+            for p in self.send_buffer:
+                self.socket.sendto(self.send_buffer[i][1], (self.dst_ip, self.dst_port))
 
-        while self.ack == 0:
-            # print("not ack yet, seq_no=", self.seq_no)
-            time.sleep(0.01)
-
-        self.ack = 0
-        print("go here")
+        if len(self.send_buffer) == 0:
+            self.ack = 0
+            print("go here")
 
     def process_dict_packets(self, multiple_output):
         # print("next_seq_no=", self.next_seq_no)
@@ -74,7 +81,7 @@ class Streamer:
                 self.next_seq_no += 1
                 print("seq num matches", key, "next_seq_no", self.next_seq_no)
                 self.remove_key.append(key)
-                multiple_output += val[1]
+                multiple_output += val
 
         if multiple_output != b"":
             if len(self.remove_key) != 0:
@@ -107,7 +114,6 @@ class Streamer:
                 # store the data in the receive buffer
                 packet = struct.unpack('i i i' + str(len(data) - 12) + 's', data)
                 recv_seq_no = packet[0]
-
                 self.ack_no = packet[2]
                 recv_data = packet[3]
                 self.ack = packet[1]
@@ -127,8 +133,18 @@ class Streamer:
                     self.ack_no = self.next_seq_no
                     self.send(b'')
 
-                self.buffer[recv_seq_no] = (time.time(),recv_data)
+                self.buffer[recv_seq_no] = recv_data
 
             except Exception as e:
                 print(" listener died !")
                 print(e)
+
+
+
+"""
+    while self.ack == 0:
+            # print("not ack yet, seq_no=", self.seq_no)
+            time.sleep(0.01)
+
+ 
+"""
