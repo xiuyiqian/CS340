@@ -48,17 +48,18 @@ class Streamer:
             packet = struct.pack('i i i' + str(len(data_bytes)) + 's', self.seq_no, self.ack, self.ack_no, data_bytes)
             print("send_seq_no=", self.seq_no, "data_bytes", len(data_bytes), "ack=", self.ack)
             self.socket.sendto(packet, (self.dst_ip, self.dst_port))
-            self.seq_no += 1
 
         while self.ack == 0:
             # print("not ack yet, seq_no=", self.seq_no)
             time.sleep(0.01)
             if time.time() - send_time > self.time_out:
-                self.seq_no = self.ack_no+1
                 print("retransmit: ", self.seq_no)
                 self.send(data_bytes)
                 return
+            if self.ack and self.ack_no == self.seq_no:
+                break
         self.ack = 0
+        self.seq_no += 1
         print("go here")
 
     def process_dict_packets(self, multiple_output):
@@ -101,29 +102,41 @@ class Streamer:
                 # store the data in the receive buffer
                 packet = struct.unpack('i i i' + str(len(data) - 12) + 's', data)
                 recv_seq_no = packet[0]
-
-                self.ack_no = packet[2]
+                if packet[2] > self.ack_no:
+                    self.ack_no = packet[2]
                 recv_data = packet[3]
-                self.ack = packet[1]
+                if packet[1] and self.ack_no == self.seq_no:
+                    self.ack = 1
+                else:
+                    self.ack = 0
                 print("len of data: ", len(recv_data))
                 if len(recv_data) <= 1:
                     self.next_seq_no = self.ack_no+1
-                    self.seq_no = self.ack_no+1
                     print("server side: only ack received and ack==", self.ack)
                     continue
 
                 # print("recv_seq_no=", recv_seq_no, "recv_data=", recv_data, "ack is=", self.ack)
                 print("buffer size=", len(self.buffer), "buffer==", self.buffer)
-                print("recv_seq_no=", recv_seq_no, "nextSeq_no=", self.next_seq_no)
+                print("recv_seq_no=", recv_seq_no, "nextSeq_no=", self.next_seq_no, "ack_no=", self.ack_no)
 
                 if recv_seq_no == self.next_seq_no:
                     # print("client ready to ack")
                     self.ack = 1
-                    self.ack_no = self.next_seq_no
+                    self.ack_no = recv_seq_no
+                    self.seq_no = recv_seq_no
                     self.send(b'')
 
                 elif recv_seq_no <= self.ack_no:
+                    print("wrong retransmit here: recev:", recv_seq_no, "ack_no:", self.ack_no)
                     self.ack = 1
+                    self.ack_no = recv_seq_no
+                    self.send(b'')
+                    continue
+
+                elif recv_seq_no == self.ack_no+1:  # ack lost
+                    print("ack lost: recev:", recv_seq_no, "ack_no:", self.ack_no)
+                    self.ack = 1
+                    self.seq_no = recv_seq_no
                     self.ack_no = recv_seq_no
                     self.send(b'')
                     continue
