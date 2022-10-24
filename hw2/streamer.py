@@ -82,6 +82,9 @@ class Streamer:
 
     def send_inflight_packet(self):
         while not self.closed:
+            if self.next_seq_no == len(self.send_buffer):
+                print("no packets to send. end, next_seq_no=", self.next_seq_no)
+                return
             if self.next_seq_no < len(self.send_buffer):
                 self.seq_no = self.next_seq_no
                 data_bytes = self.send_buffer[self.next_seq_no][0]
@@ -162,7 +165,7 @@ class Streamer:
             self.fin = 1
             if time.time() - send_time > self.time_out:
                 print("retransmit fin: ", self.seq_no)
-                self.send(b"")
+                self.send_ack(b"")
                 return
         self.closed = True
         self.socket.stoprecv()
@@ -199,6 +202,12 @@ class Streamer:
                     self.next_seq_no = self.ack_no + 1
                     self.seq_no = self.ack_no + 1
                     print("server side ack_no: seq_no :", self.ack_no, "only ack received and ack==", self.ack)
+                    if self.fin == 1 and self.ack == 1:
+                        self.close()
+                    elif self.fin == 1 and self.ack == 0:
+                        self.ack = 1
+                        self.send_ack(b"")
+                        self.close()
                     continue
 
                 # print("buffer size=", len(self.buffer), "buffer==", self.buffer)
