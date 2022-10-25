@@ -2,5 +2,5 @@
 
 by Steve Tarzia
 
-Ying Zhang, yzm6145
+Ying Zhang, yzm6145\n
 Xiuyi Qian, xqu8613
