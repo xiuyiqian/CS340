@@ -1,14 +1,14 @@
 from simulator.node import Node
 
 def edge_id(v1,v2):  # normalize key v1,v2 to tuple (v_low,v_hi)
-    return (v1, v2) if v1 <= v2 else (v2, v1)
+    return (v1, v2)
 
 class Edge:
     # {{{ Edge Class
     edge_id = 0
 
     def __init__(self, source, target, weight=1):
-        # both source and target are Node objects
+        # both source and target are Node objects ID
         self.source = source
         self.target = target
         if type(weight) == int:
@@ -69,55 +69,55 @@ class Graph:
     def __init__(self, nodes=[], edges=[]):
     # nodes: list of Node objects;
     # edges: list of Edge objects;
+        self.nodes = dict()
+        self.edges = dict()
 
         if type(nodes) == list:
-            self.nodes = nodes
-        else:
-            self.nodes = [nodes]
+            for i in nodes:
+                self.nodes[i.id]=i
 
         if type(edges) == list:
-            self.edges = edges
+            for i in edges:
+                self.edges[i.id] = i
             reverse = []
             # both directions are needed
             for edge in edges:
                 reverse.append(edge.reverse())
-            self.edges.extend(reverse)
-        else:
-            self.edges = [edges, edges.reverse()]
-            # self.edges = [edges]
 
+            for i in reverse:
+                self.edges[i.id] = i
 
     def getNodes(self):
         return self.nodes
 
     def hasNode(self, node):
         return node in self.nodes
-
+    # node is node not id
     def addNode(self, node):
-        if self.hasNode(node):
+        if self.hasNode(node.id):
             print ("{} is already in the graph".format(node))
         else:
-            self.nodes.append(node)
+            self.nodes[node.id]=node
 
     def addNodes(self, nodes):
         for node in nodes:
             self.addNode(node)
-
-    def removeNode(self, node):
+    #n: is the id
+    def removeNode(self, n):
         # also remove edges that include the node
-        if self.hasNode(node):
-            self.nodes.remove(node)
+        if self.hasNode(n):
+            self.nodes.pop(n)
             remove = []
-            for edge in self.edges:
-                source = edge.getSource()
-                target = edge.getTarget()
-                if source == node or target == node:
-                    remove.append(edge)
+            for e in self.edges:
+                source = self.edges[e].getSource()
+                target = self.edges[e].getTarget()
+                if source.id == n or target.id == n:
+                    remove.append(e)
             for edge in remove:
-                self.edges.remove(edge)
+                self.edges.pop(edge)
 
         else:
-            print ("{} is not in this graph!".format(node))
+            print ("{} is not in this graph!".format(n))
 
     def removeNodes(self, nodes):
         for node in nodes:
@@ -128,35 +128,35 @@ class Graph:
 
     def hasEdge(self, edge):
         return edge in self.edges
-
+    #edge:edge
     def addEdge(self, edge):
-        if self.hasEdge(edge):
+        if self.hasEdge(edge.id):
             print ("{} is already in this graph".format(edge))
             return
-        source = edge.getSource()
-        target = edge.getTarget()
-        if source in self.nodes and target in self.nodes:
-            self.edges.extend([edge, edge.reverse()])
+        source = self.edges[edge.id].getSource()
+        target = self.edges[edge.id].getTarget()
+        if source.id in self.nodes and target.id in self.nodes:
+            self.edges[(source.id,target.id)] = edge
+            self.edges[(target.id,source.id)] = edge.reverse()
         else:
             print ("source or target node of this edge is not eligible!")
 
     def addEdges(self, edges):
         for edge in edges:
             self.addEdge(edge)
-
+    # edge: edge
     def removeEdge(self, edge):
-        reversedEdge = edge.reverse()
-        if self.hasEdge(edge) and self.hasEdge(reversedEdge):
-            self.edges.remove(edge)
-            self.edges.remove(reversedEdge)
+        source = self.edges[edge.id].getSource()
+        target = self.edges[edge.id].getTarget()
+        if self.hasEdge(edge.id) and self.hasEdge((target.id,source.id)):
+            self.edges.pop(edge.id)
+            self.edges.pop((target.id,source.id))
         else:
-            print ("{} is not in this graph!".format(edge))
+            print ("{} is not in this graph!".format(edge.id))
 
     def removeEdges(self, edges):
         for edge in edges:
             self.removeEdge(edge)
-
-
 
     def __repr__(self):
         return self.__str__()
