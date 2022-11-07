@@ -144,15 +144,15 @@ class Graph:
     def addEdges(self, edges):
         for edge in edges:
             self.addEdge(edge)
-    # edge: edge
+    # edge: id
     def removeEdge(self, edge):
-        source = self.edges[edge.id].getSource()
-        target = self.edges[edge.id].getTarget()
-        if self.hasEdge(edge.id) and self.hasEdge((target.id,source.id)):
-            self.edges.pop(edge.id)
+        source = self.edges[id].getSource()
+        target = self.edges[id].getTarget()
+        if self.hasEdge(edge) and self.hasEdge((target.id,source.id)):
+            self.edges.pop(edge)
             self.edges.pop((target.id,source.id))
         else:
-            print ("{} is not in this graph!".format(edge.id))
+            print ("{} is not in this graph!".format(edge))
 
     def removeEdges(self, edges):
         for edge in edges:
