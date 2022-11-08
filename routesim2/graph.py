@@ -71,6 +71,8 @@ class Graph:
     # edges: list of Edge objects;
         self.nodes = dict()
         self.edges = dict()
+        # dict:list of neighbours
+        self.neighbours:dict[int,list] = dict()
 
         if type(nodes) == list:
             for i in nodes:
@@ -92,7 +94,7 @@ class Graph:
 
     def hasNode(self, node):
         return node in self.nodes
-    # node is node not id
+    # node is node
     def addNode(self, node):
         if self.hasNode(node.id):
             print ("{} is already in the graph".format(node))
@@ -135,6 +137,10 @@ class Graph:
             return
         source = self.edges[edge.id].getSource()
         target = self.edges[edge.id].getTarget()
+
+        self.neighbours[source].append(target)
+        self.neighbours[target].append(source)
+
         if source.id in self.nodes and target.id in self.nodes:
             self.edges[(source.id,target.id)] = edge
             self.edges[(target.id,source.id)] = edge.reverse()
@@ -151,6 +157,16 @@ class Graph:
         if self.hasEdge(edge) and self.hasEdge((target.id,source.id)):
             self.edges.pop(edge)
             self.edges.pop((target.id,source.id))
+            if target not in self.neighbours[source]:
+                print("{} not in {} neighbours".format(target,source))
+            else:
+                self.neighbours[source].remove(target)
+
+            if target not in self.neighbours[source]:
+                print("{} not in {} neighbours".format(source,target))
+            else:
+                self.neighbours[target].remove(source)
+
         else:
             print ("{} is not in this graph!".format(edge))
 
