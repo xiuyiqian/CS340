@@ -1,5 +1,6 @@
 from simulator.node import Node
 
+
 class Edge:
     # {{{ Edge Class
     edge_id = 0
@@ -13,7 +14,7 @@ class Edge:
         else:
             self.weight = 1  # default
 
-        self.id = (source,target)
+        self.id = (source, target)
 
     def __eq__(self, edge):
         if self.source == edge.source and self.target == edge.target and self.weight == edge.weight:
@@ -54,24 +55,27 @@ class Edge:
         weight = self.weight
         return Edge(target, source, weight)
 
+
 """
 Graph class
 """
+
+
 # undirected graph
 class Graph:
-# {{{ Graph Class
+    # {{{ Graph Class
 
     def __init__(self, nodes=[], edges=[]):
-    # nodes: list of Node objects;
-    # edges: list of Edge objects;
+        # nodes: list of Node objects;
+        # edges: list of Edge objects;
         self.nodes = dict()
         self.edges = dict()
         # dict:list of neighbours
-        self.neighbours:dict[int,list] = dict()
+        self.neighbours: dict[int, list] = dict()
 
         if type(nodes) == list:
             for i in nodes:
-                self.nodes[i.id]=i
+                self.nodes[i.id] = i
 
         if type(edges) == list:
             for i in edges:
@@ -89,17 +93,19 @@ class Graph:
 
     def hasNode(self, node):
         return node in self.nodes
+
     # node is node
     def addNode(self, node):
         if self.hasNode(node.id):
-            print ("{} is already in the graph".format(node))
+            print("{} is already in the graph".format(node))
         else:
-            self.nodes[node.id]=node
+            self.nodes[node.id] = node
 
     def addNodes(self, nodes):
         for node in nodes:
             self.addNode(node)
-    #n: is the id
+
+    # n: is the id
     def removeNode(self, n):
         # also remove edges that include the node
         if self.hasNode(n):
@@ -114,7 +120,7 @@ class Graph:
                 self.edges.pop(edge)
 
         else:
-            print ("{} is not in this graph!".format(n))
+            print("{} is not in this graph!".format(n))
 
     def removeNodes(self, nodes):
         for node in nodes:
@@ -125,10 +131,11 @@ class Graph:
 
     def hasEdge(self, edge):
         return edge in self.edges
-    #edge:edge
+
+    # edge:edge
     def addEdge(self, edge):
         if self.hasEdge(edge.id):
-            print ("{} is already in this graph".format(edge))
+            print("{} is already in this graph".format(edge))
             return
         source = self.edges[edge.id].getSource()
         target = self.edges[edge.id].getTarget()
@@ -137,14 +144,15 @@ class Graph:
         self.neighbours[target].append(source)
 
         if source.id in self.nodes and target.id in self.nodes:
-            self.edges[(source.id,target.id)] = edge
-            self.edges[(target.id,source.id)] = edge.reverse()
+            self.edges[(source.id, target.id)] = edge
+            self.edges[(target.id, source.id)] = edge.reverse()
         else:
-            print ("source or target node of this edge is not eligible!")
+            print("source or target node of this edge is not eligible!")
 
     def addEdges(self, edges):
         for edge in edges:
             self.addEdge(edge)
+
     # edge: id
     def removeEdge(self, edge):
         if edge not in self.edges:
@@ -153,21 +161,21 @@ class Graph:
         else:
             source = self.edges[edge].getSource()
             target = self.edges[edge].getTarget()
-        if self.hasEdge(edge) and self.hasEdge((target.id,source.id)):
+        if self.hasEdge(edge) and self.hasEdge((target.id, source.id)):
             self.edges.pop(edge)
-            self.edges.pop((target.id,source.id))
+            self.edges.pop((target.id, source.id))
             if target not in self.neighbours[source]:
-                print("{} not in {} neighbours".format(target,source))
+                print("{} not in {} neighbours".format(target, source))
             else:
                 self.neighbours[source].remove(target)
 
             if target not in self.neighbours[source]:
-                print("{} not in {} neighbours".format(source,target))
+                print("{} not in {} neighbours".format(source, target))
             else:
                 self.neighbours[target].remove(source)
 
         else:
-            print ("{} is not in this graph!".format(edge))
+            print("{} is not in this graph!".format(edge))
 
     def removeEdges(self, edges):
         for edge in edges:

@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from simulator.config import *
 from simulator.event import Event
 from simulator.event_queue import Event_Queue
-
+from .config import ROUTE_ALGORITHM_NODE
 
 class Topology:
 

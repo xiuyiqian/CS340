@@ -2,7 +2,6 @@ import math
 
 from simulator.node import Node
 from graph import Graph, Edge
-from simulator import topology
 import json
 import time
 
@@ -23,7 +22,7 @@ class Link_State_Node(Node):
             self.Node = self.graph.nodes[id]
         else:
             self.Node = Node(id)
-            self.graph.addNode(Node)
+            self.graph.addNode(self.Node)
     # Return a string
     def __str__(self):
         return "Rewrite this function to define your node dump printout"
