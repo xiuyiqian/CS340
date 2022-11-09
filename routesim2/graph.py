@@ -1,8 +1,5 @@
 from simulator.node import Node
 
-def edge_id(v1,v2):  # normalize key v1,v2 to tuple (v_low,v_hi)
-    return (v1, v2)
-
 class Edge:
     # {{{ Edge Class
     edge_id = 0
@@ -16,7 +13,7 @@ class Edge:
         else:
             self.weight = 1  # default
 
-        self.id = edge_id(source,target)
+        self.id = (source,target)
 
     def __eq__(self, edge):
         if self.source == edge.source and self.target == edge.target and self.weight == edge.weight:
@@ -49,8 +46,6 @@ class Edge:
         if type(weight) == int:
             self.weight = weight
         else:
-            print
-            "Please enter an integer for weight! (Now set to default value 1)"
             self.weight = 1  # default
 
     def reverse(self):
@@ -84,7 +79,7 @@ class Graph:
             reverse = []
             # both directions are needed
             for edge in edges:
-                reverse.append(edge.reverse())
+                reverse.append(self.edges[edge].reverse())
 
             for i in reverse:
                 self.edges[i.id] = i
@@ -152,8 +147,12 @@ class Graph:
             self.addEdge(edge)
     # edge: id
     def removeEdge(self, edge):
-        source = self.edges[id].getSource()
-        target = self.edges[id].getTarget()
+        if edge not in self.edges:
+            print("the edge does not exist")
+            return
+        else:
+            source = self.edges[edge].getSource()
+            target = self.edges[edge].getTarget()
         if self.hasEdge(edge) and self.hasEdge((target.id,source.id)):
             self.edges.pop(edge)
             self.edges.pop((target.id,source.id))
