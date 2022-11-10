@@ -137,15 +137,19 @@ class Graph:
         if self.hasEdge(edge.id):
             print("{} is already in this graph".format(edge))
             return
-        source = self.edges[edge.id].getSource()
-        target = self.edges[edge.id].getTarget()
-
-        self.neighbours[source].append(target)
-        self.neighbours[target].append(source)
+        source = edge.source
+        target = edge.target
+        # print("source ", source, "target ", target)
+        if source.id not in self.neighbours:
+            self.neighbours[source.id] = []
+        self.neighbours[source.id].append(target)
+        if target.id not in self.neighbours:
+            self.neighbours[target.id] = []
+        self.neighbours[target.id].append(source)
 
         if source.id in self.nodes and target.id in self.nodes:
-            self.edges[(source.id, target.id)] = edge
-            self.edges[(target.id, source.id)] = edge.reverse()
+            self.edges[(source, target)] = edge
+            self.edges[(target, source)] = edge.reverse()
         else:
             print("source or target node of this edge is not eligible!")
 

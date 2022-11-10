@@ -3,16 +3,16 @@ import math
 from simulator.node import Node
 from graph import Graph, Edge
 import json
-import time
 
 actions = ["add edge", "delete edge", "update weight"]
+
 
 class Link_State_Node(Node):
     def __init__(self, id):
         super().__init__(id)
         # every node need to know the other nodes and edge information so create graph for each node
         self.graph = Graph()
-        self.reach = {}   # dest, cost
+        self.reach = {}  # dest, cost
         # for most recent routing msg for each edge
         self.routing_msgs = {}
         self.times = dict()
@@ -23,6 +23,7 @@ class Link_State_Node(Node):
         else:
             self.Node = Node(id)
             self.graph.addNode(self.Node)
+
     # Return a string
     def __str__(self):
         return "Rewrite this function to define your node dump printout"
@@ -32,9 +33,10 @@ class Link_State_Node(Node):
         min_dist = math.inf
         closet_node = None
         for edge in self.graph.getEdges():
-            if edge.get_source() == self.id and edge.get_target() != self.id:
-                if edge.get_weight() < min_dist:
-                    closet_node = edge.get_target()
+            e = edge[self.id]
+            if e.get_source() == self.id and e.get_target() != self.id:
+                if e.get_weight() < min_dist:
+                    closet_node = e.get_target()
         return closet_node, min_dist
 
     def Dijkstra(self):
@@ -74,29 +76,29 @@ class Link_State_Node(Node):
         # number of access to the edge
         update = None
 
-        if not self.times.get((self.id,neighbor)):
-            self.times[(self.id,neighbor)] = 1
+        if not self.times.get((self.id, neighbor)):
+            self.times[(self.id, neighbor)] = 1
         else:
             self.times[(self.id, neighbor)] += 1
         if latency < 0:
-            self.graph.removeEdge((self.id,neighbor))
+            self.graph.removeEdge((self.id, neighbor))
             update = "delete edge"
         else:
-            if self.graph.hasEdge((self.id,neighbor)):
-                self.graph.edges[(self.id,neighbor)].set_weight(latency)
+            if self.graph.hasEdge((self.id, neighbor)):
+                self.graph.edges[(self.id, neighbor)].set_weight(latency)
                 self.graph.edges[(neighbor, self.id)].set_weight(latency)
                 update = "update weight"
             else:
                 if neighbor not in self.graph.nodes:
                     newNeighbor = Node(neighbor)
                     newNeighbor.neighbors.append(self.Node)
-                    self.graph.nodes[neighbor]=newNeighbor
+                    self.graph.nodes[neighbor] = newNeighbor
                     self.graph.nodes[self.id].neighbors.append(newNeighbor)
 
                 else:
                     newNeighbor = self.graph.nodes[neighbor]
                 update = "add edge"
-                newEdge = Edge(self.graph.nodes[self.id],newNeighbor,latency)
+                newEdge = Edge(self.graph.nodes[self.id], newNeighbor, latency)
                 self.graph.addEdge(newEdge)
 
                 # if the edge does not exist need to tell its neighbor
@@ -108,18 +110,17 @@ class Link_State_Node(Node):
             "n1": self.id,
             "n2": neighbor,
             "weight": latency,
-            "times":self.times[(self.id, neighbor)],
-            "action":update
+            "times": self.times[(self.id, neighbor)],
+            "action": update
         }
         # store recent routing message
-        self.routing_msgs[(self.id,neighbor)] = msg
+        self.routing_msgs[(self.id, neighbor)] = msg
         dist, prev = self.Dijkstra()
 
-        #broadcast new message
+        # broadcast new message
         for i in self.graph.neighbours[self.id]:
-            if i!=neighbor:
-                self.send_to_neighbor(i,json.dumps(msg))
-
+            if i != neighbor:
+                self.send_to_neighbor(i, json.dumps(msg))
 
     # Fill in this function
     def process_incoming_routing_message(self, m):
@@ -129,44 +130,43 @@ class Link_State_Node(Node):
         target = msg["n2"]
         weight = msg["weight"]
         times = msg["times"]
-        old_msg = self.routing_msgs.get((source,target))
+        old_msg = self.routing_msgs.get((source, target))
         if not old_msg:
             self.times[(source, target)] = 1
-            if weight!=0:
+            if weight != 0:
                 if target not in self.graph.nodes:
                     targetNode = Node(target)
-                    self.graph.nodes[target]=targetNode
+                    self.graph.nodes[target] = targetNode
 
                 if source not in self.graph.nodes:
                     sourceNode = Node(source)
-                    self.graph.nodes[source]=sourceNode
+                    self.graph.nodes[source] = sourceNode
 
                 self.graph.nodes[target].neighbors.append(source)
                 self.graph.nodes[source].neighbors.append(target)
 
-                self.graph.addEdge(Edge(source,target,weight))
+                self.graph.addEdge(Edge(source, target, weight))
             # continue to broadcast to its neighbour
             for i in self.graph.neighbours[self.id]:
-                if i!=source:
-                    self.send_to_neighbor(i,json.dumps(msg))
+                if i != source:
+                    self.send_to_neighbor(i, json.dumps(msg))
         else:
             self.times[(source, target)] += 1
-            if self.times[(source,target)] < times:
-            # new message
-                if weight<0:
-                    self.graph.removeEdge((source,target))
+            if self.times[(source, target)] < times:
+                # new message
+                if weight < 0:
+                    self.graph.removeEdge((source, target))
                 else:
                     # because it is the old messge the edge does exist so only need to update
-                    self.graph.edges[(source,target)].set_weight(weight)
-                    self.graph.edges[(source,target)].set_weight(weight)
+                    self.graph.edges[(source, target)].set_weight(weight)
+                    self.graph.edges[(source, target)].set_weight(weight)
                     for i in self.graph.neighbours[self.id]:
                         if i != source:
                             self.send_to_neighbor(i, json.dumps(msg))
             else:
-            # old message
-            # do not need to go further to end recursion
-                self.send_to_neighbor(source,json.dumps(old_msg))
-
+                # old message
+                # do not need to go further to end recursion
+                self.send_to_neighbor(source, json.dumps(old_msg))
 
     # Return a neighbor, -1 if no path to destination
     def get_next_hop(self, destination):
