@@ -24,7 +24,6 @@ class Distance_Vector_Node(Node):
 
         return "Rewrite this function to define your node dump printout"
 
-
     def bellman_ford(self):
         for node in self.graph.getNodes():
             self.dv[node.id] = math.inf
@@ -51,8 +50,14 @@ class Distance_Vector_Node(Node):
 
     # Fill in this function
     def process_incoming_routing_message(self, m):
-        pass
 
     # Return a neighbor, -1 if no path to destination
     def get_next_hop(self, destination):
+        self.bellman_ford()
+        for key, val in self.pred.items():
+            if key == destination:
+                tmp_hop = key
+                while self.pred[tmp_hop] != self.id:
+                    tmp_hop = self.pred[tmp_hop]
+                return tmp_hop
         return -1
