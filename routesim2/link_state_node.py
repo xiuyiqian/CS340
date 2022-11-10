@@ -175,7 +175,7 @@ class Link_State_Node(Node):
         for key, val in prev.items():
             if key == destination:
                 tmp_hop = key
-                while prev[tmp_hop] != self.id:
+                while prev[tmp_hop] is not None and prev[tmp_hop] != self.id:
                     tmp_hop = prev[tmp_hop]
                 return tmp_hop
         return -1

@@ -161,11 +161,11 @@ class Graph:
             print("the edge does not exist")
             return
         else:
-            source = self.edges[edge].getSource()
-            target = self.edges[edge].getTarget()
-        if self.hasEdge(edge) and self.hasEdge((target.id, source.id)):
+            source = self.edges[edge].get_source()
+            target = self.edges[edge].get_target()
+        if self.hasEdge(edge) and self.hasEdge((target, source)):
             self.edges.pop(edge)
-            self.edges.pop((target.id, source.id))
+            self.edges.pop((target, source))
             if target not in self.neighbours[source]:
                 print("{} not in {} neighbours".format(target, source))
             else:
