@@ -1,3 +1,4 @@
+netid:yzm6145, xqu8613 Name: Ying Zhang, Xiuyi Qian
 # Routesim2
 
 This is a simple network routing simulator written in Python.  It was primarily written by Kaiyu Hou, with minor tweaks by Steve Tarzia.  This code is based on the C++ Routesim code written by Peter Dinda.
