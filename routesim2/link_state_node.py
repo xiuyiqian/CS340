@@ -33,7 +33,7 @@ class Link_State_Node(Node):
         min_dist = math.inf
         closet_node = None
         for edge in self.graph.getEdges():
-            e = edge[self.id]
+            e = self.graph.edges[edge]
             if e.get_source() == self.id and e.get_target() != self.id:
                 if e.get_weight() < min_dist:
                     closet_node = e.get_target()
@@ -170,8 +170,9 @@ class Link_State_Node(Node):
 
     # Return a neighbor, -1 if no path to destination
     def get_next_hop(self, destination):
+        # prev: previous node to current node cost
         self.reach, prev = self.Dijkstra()
-        for key, val in prev:
+        for key, val in prev.items():
             if key == destination:
                 tmp_hop = key
                 while prev[tmp_hop] != self.id:

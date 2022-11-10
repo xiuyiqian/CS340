@@ -1,5 +1,5 @@
 from simulator.node import Node
-
+from collections import defaultdict
 
 class Edge:
     # {{{ Edge Class
@@ -26,7 +26,7 @@ class Edge:
         return self.id
 
     def __str__(self):
-        return '({}, {}, {})'.format(self.source, self.target, self.getWeight())
+        return '({}, {}, {})'.format(self.source, self.target, self.get_weight())
 
     def __repr__(self):
         return self.__str__()
@@ -71,7 +71,7 @@ class Graph:
         self.nodes = dict()
         self.edges = dict()
         # dict:list of neighbours
-        self.neighbours: dict[int, list] = dict()
+        self.neighbours = defaultdict(list)
 
         if type(nodes) == list:
             for i in nodes:
@@ -140,14 +140,12 @@ class Graph:
         source = edge.source
         target = edge.target
         # print("source ", source, "target ", target)
-        if source.id not in self.neighbours:
-            self.neighbours[source.id] = []
-        self.neighbours[source.id].append(target)
-        if target.id not in self.neighbours:
-            self.neighbours[target.id] = []
-        self.neighbours[target.id].append(source)
+        if source not in self.neighbours:
+            self.neighbours[source].append(target)
+        if target not in self.neighbours:
+            self.neighbours[target].append(source)
 
-        if source.id in self.nodes and target.id in self.nodes:
+        if source in self.nodes and target in self.nodes:
             self.edges[(source, target)] = edge
             self.edges[(target, source)] = edge.reverse()
         else:
