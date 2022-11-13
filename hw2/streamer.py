@@ -87,7 +87,7 @@ class Streamer:
             if len(self.remove_key) != 0:
                 for _, val in enumerate(self.remove_key):
                     self.buffer.pop(val)
-            self.remove_key = []
+                self.remove_key.clear()
             return multiple_output
         return b""
 
@@ -124,13 +124,14 @@ class Streamer:
                     continue
 
                 # print("recv_seq_no=", recv_seq_no, "recv_data=", recv_data, "ack is=", self.ack)
-                print("buffer size=", len(self.buffer), "buffer==", self.buffer)
+                #print("buffer size=", len(self.buffer), "buffer==", self.buffer)
                 print("recv_seq_no=", recv_seq_no, "nextSeq_no=", self.next_seq_no)
 
                 if recv_seq_no == self.next_seq_no:
                     # print("client ready to ack")
                     self.ack = 1
-                    self.ack_no = self.next_seq_no
+                    self.ack_no = recv_seq_no
+                    self.seq_no = recv_seq_no
                     self.send(b'')
 
                 self.buffer[recv_seq_no] = recv_data
@@ -139,12 +140,3 @@ class Streamer:
                 print(" listener died !")
                 print(e)
 
-
-
-"""
-    while self.ack == 0:
-            # print("not ack yet, seq_no=", self.seq_no)
-            time.sleep(0.01)
-
- 
-"""
