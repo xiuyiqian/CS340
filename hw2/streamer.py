@@ -68,7 +68,7 @@ class Streamer:
 
             else:
                 tmp_bytes = data_bytes[chunk_size*chunk_index:]
-            print("inside while send_seq_no=", self.seq_no, "data_bytes", tmp_bytes, "ack=", self.ack)
+            #print("inside while send_seq_no=", self.seq_no, "data_bytes", tmp_bytes, "ack=", self.ack)
             # packet = struct.pack('i i i i' + str(len(tmp_bytes)) + 's', self.seq_no, self.ack, self.ack_no, self.fin, tmp_bytes)
 
             packet = self.format_packet(tmp_bytes)
@@ -80,7 +80,7 @@ class Streamer:
             while self.ack == 0 or self.ack_no != self.seq_no:
                 time.sleep(0.01)
                 if time.time() - send_time > self.time_out:
-                    print("retransmit: ", self.seq_no)
+                    #print("retransmit: ", self.seq_no)
                     self.socket.sendto(packet, (self.dst_ip, self.dst_port))
                 if self.ack and self.ack_no == self.seq_no:
                     self.seq_no = self.ack_no + 1
@@ -98,7 +98,7 @@ class Streamer:
             val = self.buffer[self.next_seq_no]
             self.next_seq_no += 1
             self.seq_no += 1
-            print("seq num matches", key, "next_seq_no", self.next_seq_no)
+            #print("seq num matches", key, "next_seq_no", self.next_seq_no)
             self.buffer.pop(key)
             multiple_output += val
 
@@ -116,7 +116,6 @@ class Streamer:
                 self.send_fin()
                 if time.time() - send_time > self.time_out:
                     print("retransmit fin: ", self.seq_no)
-                    self.send_fin()
 
         self.ack = 0
         self.closed = True
@@ -152,15 +151,17 @@ class Streamer:
                 # store the data in the receive buffer
                 packet = struct.unpack('i i i i H' + str(len(data) - 18) + 's', data)
                 if not self.check_corruption(packet, packet[4]):
-                    print("check_corruption failed, checksum = ", packet[4])
+                    #print("check_corruption failed, checksum = ", packet[4])
                     continue
                 recv_seq_no = packet[0]
                 self.ack_no = packet[2]
                 self.fin = packet[3]
                 recv_data = packet[5]
                 self.ack = packet[1]
-                print("len of data: ", len(recv_data))
-                if self.seq_no == -1 and self.fin == 1:
+                #print("len of data: ", len(recv_data))
+                if recv_seq_no == -1:
+                    self.fin = 1
+                    self.seq_no = -1
                     print("receive fin message")
                     if self.ack == 0:
                         print("send fin ack message")
@@ -169,8 +170,7 @@ class Streamer:
                         continue
                     else:
                         print("receive fin ack message")
-                        self.fin = 1
-                        self.closed = True
+                        self.ack_no = -1
                         continue
 
                 if len(recv_data) <= 1:
@@ -178,8 +178,8 @@ class Streamer:
                     print("server side: only ack received and ack==", self.ack)
                     continue
 
-                print("recv_seq_no=", recv_seq_no, "recv_data=", recv_data, "ack is=", self.ack)
-                print("recv_seq_no=", recv_seq_no, "nextSeq_no=", self.next_seq_no)
+                #print("recv_seq_no=", recv_seq_no, "recv_data=", recv_data, "ack is=", self.ack)
+                #print("recv_seq_no=", recv_seq_no, "nextSeq_no=", self.next_seq_no)
 
                 if recv_seq_no == self.next_seq_no:
                     # print("client ready to ack")
@@ -187,13 +187,13 @@ class Streamer:
                     self.ack_no = recv_seq_no
                     self.seq_no = recv_seq_no
                     self.send_ack()
-                    print("here")
+                    #print("here")
                 elif recv_seq_no < self.next_seq_no:
                     self.ack = 1
                     self.ack_no = recv_seq_no
                     self.seq_no = self.next_seq_no
                     self.send_ack()
-                    print("or here")
+                    #print("or here")
                     continue
 
                 if self.buffer.get(recv_seq_no):
