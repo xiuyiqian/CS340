@@ -2,12 +2,12 @@
 import struct
 import time
 from concurrent.futures import ThreadPoolExecutor
-
+import hashlib
 from lossy_socket import LossyUDP
 # do not import anything else from socket except INADDR_ANY
 from socket import INADDR_ANY
 
-chunk_size = 1460
+chunk_size = 1454
 
 class Streamer:
     def __init__(self, dst_ip, dst_port,
@@ -28,6 +28,8 @@ class Streamer:
         self.closed = False
         self.ack = 0
         self.ack_no = 0
+        self.fin = 0
+        self.checksum = None
 
         self.time_out = 0.25  # threshold value
         self.retransmission = False
@@ -47,6 +49,15 @@ class Streamer:
         s = ~s & 0xffff
         return s
 
+    def format_packet(self, data_bytes):
+        header = struct.pack(('i i i i' + str(len(data_bytes)) + 's'),
+                             self.seq_no, self.ack, self.ack_no, self.fin, data_bytes)
+        self.checksum = self.format_checksum(hashlib.sha224(header).hexdigest())
+        packet = struct.pack('i i i i H' + str(len(data_bytes)) + 's',
+                             self.seq_no, self.ack, self.ack_no, self.fin, self.checksum, data_bytes)
+        # print("send_seq_no=", self.seq_no, "data_bytes", len(data_bytes), "data_bytes=", data_bytes)
+        return packet
+
     def send(self, data_bytes: bytes) -> None:
         """Note that data_bytes can be larger than one packet."""
 
@@ -58,8 +69,9 @@ class Streamer:
             else:
                 tmp_bytes = data_bytes[chunk_size*chunk_index:]
             print("inside while send_seq_no=", self.seq_no, "data_bytes", tmp_bytes, "ack=", self.ack)
-            packet = struct.pack('i i i' + str(len(tmp_bytes)) + 's', self.seq_no, self.ack, self.ack_no, tmp_bytes)
+            # packet = struct.pack('i i i i' + str(len(tmp_bytes)) + 's', self.seq_no, self.ack, self.ack_no, self.fin, tmp_bytes)
 
+            packet = self.format_packet(tmp_bytes)
             self.send_buffer[self.seq_no] = (time.time(), packet)
             send_time = time.time()
             self.socket.sendto(packet, (self.dst_ip, self.dst_port))
@@ -97,15 +109,39 @@ class Streamer:
            the necessary ACKs and retransmissions"""
         # your code goes here, especially after you add ACKs and retransmissions.
 
+        if self.fin == 0:
+            while self.ack == 0 or self.ack_no != -1:
+                time.sleep(0.01)
+                send_time = time.time()
+                self.send_fin()
+                if time.time() - send_time > self.time_out:
+                    print("retransmit fin: ", self.seq_no)
+                    self.send_fin()
+
+        self.ack = 0
         self.closed = True
         self.socket.stoprecv()
 
+    def send_fin(self):
+        self.fin = 1
+        self.seq_no = -1
+        tmp_bytes = b""
+        self.ack = 0
+        print("send fin message")
+        packet = self.format_packet(tmp_bytes)
+        self.socket.sendto(packet, (self.dst_ip, self.dst_port))
+
     def send_ack(self):
         tmp_bytes = b""
-        packet = struct.pack('i i i' + str(len(tmp_bytes)) + 's', self.seq_no, self.ack, self.ack_no,
-                             tmp_bytes)
+        self.ack = 1
+        packet = self.format_packet(tmp_bytes)
         self.socket.sendto(packet, (self.dst_ip, self.dst_port))
         self.ack = 0
+
+    def check_corruption(self, packet, recv_checksum):
+        header = struct.pack(('i i i i' + str(len(packet[5])) + 's'),
+                             packet[0], packet[1], packet[2], packet[3], packet[5])
+        return recv_checksum == self.format_checksum(hashlib.sha224(header).hexdigest())
 
     def listener(self):
         while not self.closed:  # a later hint will explain self.closed
@@ -114,12 +150,29 @@ class Streamer:
                 if len(data) == 0:
                     self.closed = True
                 # store the data in the receive buffer
-                packet = struct.unpack('i i i' + str(len(data) - 12) + 's', data)
+                packet = struct.unpack('i i i i H' + str(len(data) - 18) + 's', data)
+                if not self.check_corruption(packet, packet[4]):
+                    print("check_corruption failed, checksum = ", packet[4])
+                    continue
                 recv_seq_no = packet[0]
                 self.ack_no = packet[2]
-                recv_data = packet[3]
+                self.fin = packet[3]
+                recv_data = packet[5]
                 self.ack = packet[1]
                 print("len of data: ", len(recv_data))
+                if self.seq_no == -1 and self.fin == 1:
+                    print("receive fin message")
+                    if self.ack == 0:
+                        print("send fin ack message")
+                        self.ack_no = -1
+                        self.send_ack()
+                        continue
+                    else:
+                        print("receive fin ack message")
+                        self.fin = 1
+                        self.closed = True
+                        continue
+
                 if len(recv_data) <= 1:
                     self.next_seq_no = self.ack_no+1
                     print("server side: only ack received and ack==", self.ack)
@@ -146,7 +199,7 @@ class Streamer:
                 if self.buffer.get(recv_seq_no):
                     continue
                 self.buffer[recv_seq_no] = recv_data
-                print("buffer size=", len(self.buffer), "buffer==", self.buffer)
+                # print("buffer size=", len(self.buffer), "buffer==", self.buffer)
 
             except Exception as e:
                 print(" listener died !")
