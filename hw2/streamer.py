@@ -50,7 +50,6 @@ class Streamer:
     def send(self, data_bytes: bytes) -> None:
         """Note that data_bytes can be larger than one packet."""
 
-        send_time = time.time()
         chunk_index = 0
         while chunk_size*chunk_index < len(data_bytes):
             if (chunk_index+1) * chunk_size < len(data_bytes):
@@ -62,19 +61,20 @@ class Streamer:
             packet = struct.pack('i i i' + str(len(tmp_bytes)) + 's', self.seq_no, self.ack, self.ack_no, tmp_bytes)
 
             self.send_buffer[self.seq_no] = (time.time(), packet)
+            send_time = time.time()
             self.socket.sendto(packet, (self.dst_ip, self.dst_port))
-            chunk_index += 1
 
-            while self.ack == 0:
+
+            while self.ack == 0 or self.ack_no != self.seq_no:
                 time.sleep(0.01)
                 if time.time() - send_time > self.time_out:
                     print("retransmit: ", self.seq_no)
-                    self.send(data_bytes)
-                    return
+                    self.socket.sendto(packet, (self.dst_ip, self.dst_port))
                 if self.ack and self.ack_no == self.seq_no:
                     self.seq_no = self.ack_no + 1
                     break
 
+            chunk_index += 1
             self.ack = 0
 
     def recv(self) -> bytes:
