@@ -7,7 +7,7 @@ from lossy_socket import LossyUDP
 # do not import anything else from socket except INADDR_ANY
 from socket import INADDR_ANY
 
-chunk_size = 1459
+chunk_size = 1460
 
 class Streamer:
     def __init__(self, dst_ip, dst_port,
@@ -66,40 +66,31 @@ class Streamer:
             chunk_index += 1
 
             while self.ack == 0:
-                # print("not ack yet, seq_no=", self.seq_no)
                 time.sleep(0.01)
-                # if time.time() - send_time > self.time_out:
-                #     print("retransmit: ", self.seq_no)
-                #     self.send(data_bytes)
-                #     return
+                if time.time() - send_time > self.time_out:
+                    print("retransmit: ", self.seq_no)
+                    self.send(data_bytes)
+                    return
                 if self.ack and self.ack_no == self.seq_no:
                     self.seq_no = self.ack_no + 1
                     break
 
             self.ack = 0
 
-    def process_dict_packets(self, multiple_output):
-        for key, val in self.buffer.copy().items():  # since multithreading, we need to make copy while we iterate through
-            if key == self.next_seq_no:
-                self.next_seq_no += 1
-                self.seq_no += 1
-                print("seq num matches", key, "next_seq_no", self.next_seq_no)
-                self.remove_key.append(key)
-                multiple_output += val
-
-        if multiple_output != b"":
-            if len(self.remove_key) != 0:
-                for _, val in enumerate(self.remove_key):
-                    self.buffer.pop(val)
-                self.remove_key.clear()
-            return multiple_output
-        return b""
-
-
     def recv(self) -> bytes:
         """Blocks (waits) if no data is ready to be read from the connection."""
         # your code goes here!  The code below should be changed!
-        return self.process_dict_packets(b"")
+        multiple_output = b""
+        while self.buffer.get(self.next_seq_no):
+            key = self.next_seq_no
+            val = self.buffer[self.next_seq_no]
+            self.next_seq_no += 1
+            self.seq_no += 1
+            print("seq num matches", key, "next_seq_no", self.next_seq_no)
+            self.buffer.pop(key)
+            multiple_output += val
+
+        return multiple_output
 
     def close(self) -> None:
         """Cleans up. It should block (wait) until the Streamer is done with all
@@ -114,6 +105,7 @@ class Streamer:
         packet = struct.pack('i i i' + str(len(tmp_bytes)) + 's', self.seq_no, self.ack, self.ack_no,
                              tmp_bytes)
         self.socket.sendto(packet, (self.dst_ip, self.dst_port))
+        self.ack = 0
 
     def listener(self):
         while not self.closed:  # a later hint will explain self.closed
@@ -151,6 +143,8 @@ class Streamer:
                     print("or here")
                     continue
 
+                if self.buffer.get(recv_seq_no):
+                    continue
                 self.buffer[recv_seq_no] = recv_data
                 print("buffer size=", len(self.buffer), "buffer==", self.buffer)
 
