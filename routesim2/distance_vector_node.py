@@ -4,7 +4,6 @@ import json
 
 from simulator.node import Node
 
-
 class djNode:
     def __init__(self, cost=0, prev=list(), seq=0):
         self.cost = cost
@@ -41,9 +40,11 @@ class Distance_Vector_Node(Node):
     def updateDv(self):
         tmpDV = dict()
         # check if there is anything from neighbor DV that can be used to update its own DV table
-        # ndv is the type of djNode
+        # ndv is the type of (djNode,seq)
         for neighborID, ndv in self.neighborsDv.items():
+            ndv = ndv[0]
             edgeCost = self.neighborsCost[neighborID]
+            #neighbor dv table
             for reach, dj in ndv.items():
                 # dj is djNode type
                 cost = dj.cost  # cost to current Node
@@ -89,9 +90,9 @@ class Distance_Vector_Node(Node):
             # update cost to neighbor
             self.neighborsCost[neighbor] = latency
         else:
-            if neighbor in self.neighborsCost:
+            if neighbor in self.neighborsCost.keys():
                 self.neighborsCost.pop(neighbor)
-                self.neighbors.remove(neighbor)
+                #self.neighbors.remove(neighbor)
                 self.neighborsDv.pop(neighbor)
             else:
                 # there is no this neighbor
@@ -100,25 +101,24 @@ class Distance_Vector_Node(Node):
 
     # Fill in this function
     def process_incoming_routing_message(self, m):
-
         info = m["info"]
         id = info["id"]
         seq = info["seq"]
         dv = info["dv"]
 
-        if id not in self.neighbors:
+        if id not in self.neighborsCost.keys():
+            return
+        if id in self.neighborsDv.keys() and self.neighborsDv[id][1] >= seq:
             return
 
-        if id in self.neighborsDv.keys() and self.neighborsDv[id].seq >= seq:
-            return
-
-        #dv = {int(nid): djNode(*node) for nid, node in dv.items()}
-        self.neighborsDv[id] = dv.copy()
+        self.neighborsDv[id] = (dv.copy(),seq)
         self.updateDv()
 
     # Return a neighbor, -1 if no path to destination
     def get_next_hop(self, destination):
+        #import pdb
         if destination in self.dv:
+            #pdb.set_trace()
             return self.dv[destination].prev[-1]
         else:
             return -1
