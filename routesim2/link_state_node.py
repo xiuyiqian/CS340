@@ -1,181 +1,195 @@
-import math
-
-from simulator.node import Node
-from graph import Graph, Edge
 import json
+import heapq
+import math
+from simulator.node import Node
 
-actions = ["add edge", "delete edge", "update weight"]
+class djNode:
+    # prev is a list
+    def __init__(self, id, cost, prev=list()):
+        self.id = id
+        self.totalCost = cost
+        self.prev = prev
+    def __lt__(self, other):
+        return self.totalCost < other.totalCost
+
+    def __str__(self):
+        if self.prev is not None:
+            return "{ " + str(self.id) + " previous: " + " ".join(map(str,self.prev)) + " current Cost: " + str(self.totalCost) + "}"
+        else:
+            return "{ " + str(self.id) +  " current Cost: " + str(
+                self.totalCost) + "}"
+    def addPrev(self,id):
+        self.prev.append(id)
+        return self.prev
+    def setLatency(self,l):
+        self.totalCost += l
+class message():
+    def __init__(self,source,dest,seq,prev,latency):
+        self.source = source
+        self.dest = dest
+        self.seq = seq
+        self.prev = prev
+        self.latency = latency
 
 
 class Link_State_Node(Node):
     def __init__(self, id):
         super().__init__(id)
-        # every node need to know the other nodes and edge information so create graph for each node
-        self.graph = Graph()
-        self.reach = {}  # dest, cost
-        # for most recent routing msg for each edge
-        self.routing_msgs = {}
-        self.times = dict()
-        self.sequence_number = 0
-        self.Node = None
-        if id in self.graph.nodes:
-            self.Node = self.graph.nodes[id]
-        else:
-            self.Node = Node(id)
-            self.graph.addNode(self.Node)
-
+        # key is edge (id,neighbor), {value: latency, seq}
+        self.info = dict()
     # Return a string
     def __str__(self):
         return "Rewrite this function to define your node dump printout"
 
-    def find_min_dist_u(self):
-        # u := vertex in Q with minimum dist[u]
-        min_dist = math.inf
-        closet_node = None
-        for edge in self.graph.getEdges():
-            e = self.graph.edges[edge]
-            if e.get_source() == self.id and e.get_target() != self.id:
-                if e.get_weight() < min_dist:
-                    closet_node = e.get_target()
-        return closet_node, min_dist
-
-    def Dijkstra(self):
-        vertexes = self.graph.getNodes()
-        dist = {}
-        prev = {}
-        Q = {}
-        # construct the graphs
-        for vex in vertexes:
-            dist[vex] = math.inf
-            prev[vex] = None
-            Q[vex] = 0
-        dist[self.id] = 0
-
-        while len(Q) > 0:
-            # u := vertex in Q with minimum dist[u]
-            u, min_dist = self.find_min_dist_u()
-            if min_dist == math.inf:
-                print("no neighbors for node", self.id)
-                break
-            dist[u] = min_dist
-            Q.pop(u)
-            # try using u to make shorter path
-            for edge in self.graph.getEdges():
-                if edge.get_source() == u.id:
-                    # find neighbors of u
-                    v = edge.get_target()
-                    if min_dist + edge.get_weight() < dist[v]:
-                        dist[v] = min_dist + edge.get_weight()
-                        prev[v] = u
-
-        return dist, prev
-
     # Fill in this function
     def link_has_been_updated(self, neighbor, latency):
-        # latency =  -1 if delete a link
-        # number of access to the edge
-        update = None
+        # latency = -1 if delete a link
+        k = frozenset((self.id, neighbor))
+        if neighbor in self.neighbors:
+            if latency == -1:
+                self.neighbors.remove(neighbor)
 
-        if not self.times.get((self.id, neighbor)):
-            self.times[(self.id, neighbor)] = 1
+            self.info[k]["latency"] = latency
+            self.info[k]["seq"] += 1
+            # cannot drop the dict as it needs to be passed to other neighbors
         else:
-            self.times[(self.id, neighbor)] += 1
-        if latency < 0:
-            self.graph.removeEdge((self.id, neighbor))
-            update = "delete edge"
-        else:
-            if self.graph.hasEdge((self.id, neighbor)):
-                self.graph.edges[(self.id, neighbor)].set_weight(latency)
-                self.graph.edges[(neighbor, self.id)].set_weight(latency)
-                update = "update weight"
-            else:
-                if neighbor not in self.graph.nodes:
-                    newNeighbor = Node(neighbor)
-                    newNeighbor.neighbors.append(self.Node)
-                    self.graph.nodes[neighbor] = newNeighbor
-                    self.graph.nodes[self.id].neighbors.append(newNeighbor)
+            # not in neighbor
+            self.neighbors.append(neighbor)
+            self.info[k] = {
+                "latency": latency,
+                "seq": 1
+            }
+        # message sender is different from source. source is the edge information not necessarily equal to message sender
+        allMsg = list()
+        for nodePair, msg in self.info.items():
+            source,target = nodePair
+            l = msg["latency"]
+            time = msg["seq"]
 
-                else:
-                    newNeighbor = self.graph.nodes[neighbor]
-                update = "add edge"
-                newEdge = Edge(self.graph.nodes[self.id], newNeighbor, latency)
-                self.graph.addEdge(newEdge)
-
-                # if the edge does not exist need to tell its neighbor
-            for i, old in self.routing_msgs.items():
-                self.send_to_neighbor(neighbor, json.dumps(old))
-
-        msg = {
-            "source": self.id,
-            "n1": self.id,
-            "n2": neighbor,
-            "weight": latency,
-            "times": self.times[(self.id, neighbor)],
-            "action": update
-        }
-        # store recent routing message
-        self.routing_msgs[(self.id, neighbor)] = msg
-        dist, prev = self.Dijkstra()
-
-        # broadcast new message
-        for i in self.graph.neighbours[self.id]:
-            if i != neighbor:
-                self.send_to_neighbor(i, json.dumps(msg))
+            m = {
+                "messageSender": self.id,
+                "source":source,
+                "dest": target,
+                "latency":l,
+                "seq":time
+            }
+            allMsg.append(m)
+            self.send_to_neighbors(json.dumps({"information":allMsg}))
 
     # Fill in this function
     def process_incoming_routing_message(self, m):
-        # load json message
-        msg = json.loads(m)
-        source = msg["source"]
-        target = msg["n2"]
-        weight = msg["weight"]
-        times = msg["times"]
-        old_msg = self.routing_msgs.get((source, target))
-        if not old_msg:
-            self.times[(source, target)] = 1
-            if weight != 0:
-                if target not in self.graph.nodes:
-                    targetNode = Node(target)
-                    self.graph.nodes[target] = targetNode
+        messages = json.loads(m)["information"]
+        #print(len(messages))
+        for msg in messages:
+        #print(msg)
+            sender = msg["messageSender"]
+            # updated Edge source
+            source = msg["source"]
+            # updated Edge dest
+            target = msg["dest"]
+            # cost
+            cost = msg["latency"]
+            # sequence number
+            seq = msg["seq"]
 
-                if source not in self.graph.nodes:
-                    sourceNode = Node(source)
-                    self.graph.nodes[source] = sourceNode
+            k = frozenset((source, target))
 
-                self.graph.nodes[target].neighbors.append(source)
-                self.graph.nodes[source].neighbors.append(target)
+            if self.id == source or self.id == target:
+                continue
+            if self.id == sender:
+                continue
 
-                self.graph.addEdge(Edge(source, target, weight))
-            # continue to broadcast to its neighbour
-            for i in self.graph.neighbours[self.id]:
-                if i != source:
-                    self.send_to_neighbor(i, json.dumps(msg))
-        else:
-            self.times[(source, target)] += 1
-            if self.times[(source, target)] < times:
-                # new message
-                if weight < 0:
-                    self.graph.removeEdge((source, target))
+            if k in self.info.keys():
+                # ignore older message for the same edge
+                if self.info[k]["seq"] >= seq:
+                    continue
                 else:
-                    # because it is the old messge the edge does exist so only need to update
-                    self.graph.edges[(source, target)].set_weight(weight)
-                    self.graph.edges[(source, target)].set_weight(weight)
-                    for i in self.graph.neighbours[self.id]:
-                        if i != source:
-                            self.send_to_neighbor(i, json.dumps(msg))
+                    ## "latency": latency, "seq": 1
+                    self.info[k]["latency"] = cost
+                    self.info[k]["seq"] = seq
+                    m = [{
+                        "messageSender": self.id,
+                        "source": source,
+                        "dest": target,
+                        "latency": cost,
+                        "seq": seq
+                    }]
+                    # cannot send to the sender
+                    for n in self.neighbors:
+                        if n != sender:
+                            self.send_to_neighbor(n,json.dumps({"information":m}))
             else:
-                # old message
-                # do not need to go further to end recursion
-                self.send_to_neighbor(source, json.dumps(old_msg))
+                # insert it into info table
+                    self.info[k] = {
+                        "latency": cost,
+                        "seq": seq
+                    }
+                    # send to other neighbor
+                    m = [{
+                        "messageSender": self.id,
+                        "source": source,
+                        "dest": target,
+                        "latency": cost,
+                        "seq": seq
+                    }]
+                    # no need to concern
+                    for n in self.neighbors:
+                        if n != sender:
+                            self.send_to_neighbor(n, json.dumps({"information": m}))
+
+    def Dijkstra(self,goal):
+        import pdb
+        dist = {}
+        q = list()
+        prev = list()
+        # construct the graphs
+        dist[self.id] = 0
+        #     def __init__(self, id, latency, prev=list()):
+        tmpNode = djNode(self.id,0,list())
+
+        heapq.heappush(q,tmpNode)
+
+        while len(q) > 0:
+            oneNode = heapq.heappop(q)
+            currentID = oneNode.id
+            if currentID == goal:
+                return oneNode.prev[0]
+
+            prev = oneNode.prev
+
+            for nodePair, msg in self.info.items():
+                first,second = nodePair
+                #pdb.set_trace()
+                if msg["latency"] == -1:
+                    # deleted link
+                    continue
+                # only need neighbor information
+                if currentID!=first and currentID!=second:
+                    #pdb.set_trace()
+                    #print("none of source or target " + str(currentID))
+                    continue
+                else:
+                    t1 = None # the other end
+                    if currentID == first:
+                        t1 = second
+                    else:
+                        t1 = first
+
+                    currentCost = msg["latency"] + oneNode.totalCost
+                    #pdb.set_trace()
+                    if t1 not in dist.keys() or dist[t1] > currentCost:
+                        dist[t1] = currentCost
+                        tmpNode = djNode(t1, currentCost, prev + [t1])
+                        heapq.heappush(q,tmpNode)
+            #pdb.set_trace()
+
+        return None
 
     # Return a neighbor, -1 if no path to destination
     def get_next_hop(self, destination):
-        # prev: previous node to current node cost
-        self.reach, prev = self.Dijkstra()
-        for key, val in prev.items():
-            if key == destination:
-                tmp_hop = key
-                while prev[tmp_hop] != self.id:
-                    tmp_hop = prev[tmp_hop]
-                return tmp_hop
-        return -1
+        res = self.Dijkstra(destination)
+        #print(res)
+        if not res:
+            return -1
+        else:
+            return res
