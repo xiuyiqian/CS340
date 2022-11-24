@@ -1,63 +1,136 @@
-import math
+from typing import Dict, List, NamedTuple, Tuple
+import copy
+import json
 
 from simulator.node import Node
-from graph import Graph, Edge
+
+
+class djNode:
+    def __init__(self, cost=0, prev=list(), seq=0):
+        self.cost = cost
+        self.prev = prev
+        self.seq = seq
+
+    def addStop(self, n):
+        self.prev.append(n)
+
+    def addCost(self, n):
+        self.cost += n
 
 
 class Distance_Vector_Node(Node):
     def __init__(self, id):
         super().__init__(id)
-        self.neighbours: dict[int, dict()] = dict()
-        self.dv = dict()
-        self.dv[id] = 0
-        self.pred = dict()
-
-        self.graph = Graph()
-        if id in self.graph.nodes:
-            self.Node = self.graph.nodes[id]
-        else:
-            self.Node = Node(id)
-            self.graph.addNode(self.Node)
+        # neighborID: cost
+        self.neighborsCost = {}
+        # self DV table
+        self.dv = {}
+        # neighbors and their DV table
+        # neighbor(int):DVTable{}
+        self.neighborsDv = {}
+        # neighbors
 
     # Return a string
     def __str__(self):
+        return f"<ID: {self.id}\n " \
+               f"neighbors: {self.neighbors}\n" \
+               f"DV table={self.dv}\n", \
+               f"Neighbor Cost = {self.neighborsCost}\n", \
+               f"Neighbors DV Tbale = {self.neighborsDv}\n>"
 
-        return "Rewrite this function to define your node dump printout"
+    def updateDv(self):
+        tmpDV = dict()
+        # check if there is anything from neighbor DV that can be used to update its own DV table
+        # ndv is the type of djNode
+        for neighborID, ndv in self.neighborsDv.items():
+            edgeCost = self.neighborsCost[neighborID]
+            for reach, dj in ndv.items():
+                # dj is djNode type
+                cost = dj.cost  # cost to current Node
+                prev = dj.prev
+                target = tmpDV.get(reach)
 
-    def bellman_ford(self):
-        for node in self.graph.getNodes():
-            self.dv[node.id] = math.inf
-            self.pred[node.id] = None
+                targetCost = cost + edgeCost
 
-        for node in self.graph.getNodes():
-            for edge in node.neighbours:
-                # tempDistance <- distance[M] + edge_weight(M, N)
-                tmp_dist = edge.get_weight() + self.dv[edge.get_target()]
-                if tmp_dist < self.dv[node.id]:
-                    # distance[N] < - tempDistance
-                    # previous[N] < - M
-                    self.dv[node.id] = tmp_dist
-                    self.pred[node.id] = edge.get_target()
+                # avoid cycle/checked visited
+                if self.id in prev or neighborID in prev:
+                    continue
+                # target is djNode Type
+                if target is not None and targetCost >= target.cost:
+                    # only update if the cost is smaller than targetCost
+                    continue
+                else:
+                    # add new Node to the table
+                    newPrev = prev.copy()
+                    newDj = djNode(targetCost, newPrev)
+                    newDj.addStop(neighborID)
+                    tmpDV[reach] = newDj
 
-        for edge in self.Node.neighbors:
-            if self.dv[edge.get_target()] + edge.get_weight() < self.dv[edge.get_source()]:
-                print("Negative Cycle Exists")
+        # add neighbor to the DV if not exist
+        for neighborID, cost in self.neighborsCost.items():
+            if neighborID not in tmpDV or tmpDV[neighborID].cost > cost:
+                tmpDV[neighborID] = djNode(cost, [neighborID], self.get_time())
 
-    # Fill in this function
+        #Object of type 'djNode' is not JSON serializable
+
+        sendInfo = dict()
+        # if there is change
+        if self.change(tmpDV):
+            self.dv = tmpDV
+            sendInfo["info"] = {
+                "id": self.id,
+                "seq": self.get_time(),
+                "dv": self.dv
+            }
+            self.send_to_neighbors(sendInfo)
+
     def link_has_been_updated(self, neighbor, latency):
-        # latency = -1 if delete a link
-        pass
+        if latency != -1:
+            # update cost to neighbor
+            self.neighborsCost[neighbor] = latency
+        else:
+            if neighbor in self.neighborsCost:
+                self.neighborsCost.pop(neighbor)
+                self.neighbors.remove(neighbor)
+                self.neighborsDv.pop(neighbor)
+            else:
+                # there is no this neighbor
+                return
+        self.updateDv()
 
     # Fill in this function
     def process_incoming_routing_message(self, m):
 
+        info = m["info"]
+        id = info["id"]
+        seq = info["seq"]
+        dv = info["dv"]
+
+        if id not in self.neighbors:
+            return
+
+        if id in self.neighborsDv.keys() and self.neighborsDv[id].seq >= seq:
+            return
+
+        #dv = {int(nid): djNode(*node) for nid, node in dv.items()}
+        self.neighborsDv[id] = dv.copy()
+        self.updateDv()
+
     # Return a neighbor, -1 if no path to destination
     def get_next_hop(self, destination):
-        self.bellman_ford()
-        for key, val in self.pred.items():
-            if key == destination:
-                tmp_hop = key
-                while self.pred[tmp_hop] != self.id:
-                    tmp_hop = self.pred[tmp_hop]
-                return tmp_hop
-        return -1
+        if destination in self.dv:
+            return self.dv[destination].prev[-1]
+        else:
+            return -1
+
+    def change(self, dv):
+        for reach, dj in dv.items():
+            cost = dj.cost
+            prev = dj.prev
+            node = self.dv.get(reach)
+            if node and node.cost == cost and node.prev == prev:
+                continue
+            else:
+                return True
+
+        return False
